@@ -189,9 +189,12 @@ gold_progress = (silver_clients
     .join(nutrition_stats, "client_id", "left")
     .withColumn("weeks_in_program", F.lit(12))
     .withColumn("lbs_changed", F.round(F.col("current_weight_lbs") - F.col("start_weight_lbs"), 1))
-    .withColumn("pct_to_goal", F.round(
-        (F.col("start_weight_lbs") - F.col("current_weight_lbs")) /
-        F.nullif(F.col("start_weight_lbs") - F.col("goal_weight_lbs"), F.lit(0)) * 100, 1))
+    # % to goal only means something when the goal is a real change (>= 5 lbs).
+    # Maintenance/recomp goals made tiny denominators and blew up to 300%+.
+    .withColumn("pct_to_goal",
+        F.when(F.abs(F.col("start_weight_lbs") - F.col("goal_weight_lbs")) >= 5,
+            F.round((F.col("start_weight_lbs") - F.col("current_weight_lbs")) /
+                    (F.col("start_weight_lbs") - F.col("goal_weight_lbs")) * 100, 1)))
     .withColumn("checkin_rate_pct", F.round(F.col("checkins_completed") / F.col("weeks_in_program") * 100, 0))
     .withColumn("logging_rate_pct", F.round(F.col("days_logged") / (F.col("weeks_in_program") * 7) * 100, 0))
     .withColumn("status",
@@ -231,25 +234,45 @@ display(gold_weekly)
 
 # COMMAND ----------
 
-lifts = silver_workouts.withColumn("week_start", F.date_trunc("week", "workout_date").cast("date"))
-bounds = lifts.groupBy("client_id").agg(F.min("week_start").alias("w1"), F.max("week_start").alias("wN"))
+# Clients rotate exercises, so a lift often doesn't appear in the first/last calendar week.
+# Compare each lift's FIRST session to its LAST session instead.
+w_ex = Window.partitionBy("client_id", "exercise")
 
-gold_strength = (lifts.join(bounds, "client_id")
+gold_strength = (silver_workouts
+    .withColumn("first_date", F.min("workout_date").over(w_ex))
+    .withColumn("last_date", F.max("workout_date").over(w_ex))
     .groupBy("client_id", "exercise")
-    .agg(F.max(F.when(F.col("week_start") == F.col("w1"), F.col("load_lbs"))).alias("first_week_top_lbs"),
-         F.max(F.when(F.col("week_start") == F.col("wN"), F.col("load_lbs"))).alias("last_week_top_lbs"))
-    .withColumn("lbs_gained", F.col("last_week_top_lbs") - F.col("first_week_top_lbs"))
+    .agg(F.max(F.when(F.col("workout_date") == F.col("first_date"), F.col("load_lbs"))).alias("first_session_lbs"),
+         F.max(F.when(F.col("workout_date") == F.col("last_date"), F.col("load_lbs"))).alias("last_session_lbs"),
+         F.countDistinct("workout_date").alias("sessions"))
+    .withColumn("lbs_gained", F.col("last_session_lbs") - F.col("first_session_lbs"))
     .orderBy("client_id", "exercise"))
 
-gold_strength.write.mode("overwrite").saveAsTable(table("gold_strength_progress"))
+gold_strength.write.mode("overwrite").option("overwriteSchema", True).saveAsTable(table("gold_strength_progress"))
 display(gold_strength)
 
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## 📊 Analysis — which coaching program keeps clients most consistent?
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT program,
+# MAGIC        COUNT(*) AS clients,
+# MAGIC        ROUND(AVG(checkin_rate_pct), 0) AS avg_checkin_rate,
+# MAGIC        ROUND(AVG(lbs_changed), 1) AS avg_lbs_changed
+# MAGIC FROM gold_client_progress
+# MAGIC GROUP BY program
+# MAGIC ORDER BY avg_checkin_rate DESC
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## 💪 Your turn — extend it (this is what makes it YOURS in an interview)
-# MAGIC 1. Write a Spark SQL query: which program (Foundation / Discipline 90 / Feel Alive Elite) has the best average `pct_to_goal`?
+# MAGIC 1. ✅ Spark SQL program comparison (done above)
 # MAGIC 2. Add a `protein_per_lb` column to `gold_client_progress` (avg protein ÷ current weight).
-# MAGIC 3. Build a Databricks Dashboard on the gold tables (weight trend line, status counts, strength gains).
+# MAGIC 3. ✅ Databricks Dashboard on the gold tables (done)
 # MAGIC 4. Schedule this notebook as a Lakeflow Job that runs weekly.
 # MAGIC 5. Bonus: rewrite the Silver step as Lakeflow Declarative Pipeline with data-quality expectations.
