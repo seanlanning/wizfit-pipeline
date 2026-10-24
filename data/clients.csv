@@ -1,0 +1,16 @@
+client_id,start_date,goal,program,start_weight_lbs,goal_weight_lbs
+WF-001,2026-06-04,fat_loss,Foundation,167.6,139.3
+WF-002,2026-06-01,muscle_gain,Foundation,174.1,174.5
+WF-003,2026-06-11,muscle_gain,Feel Alive Elite,228.2,231.4
+WF-004,2026-06-01,fat_loss,Foundation,212.2,183.9
+WF-005,2026-06-06,fat_loss,Foundation,194.2,167.7
+WF-006,2026-06-05,fat_loss,Foundation,202.7,172.4
+WF-007,2026-06-02,muscle_gain,Feel Alive Elite,178.1,188.5
+WF-008,2026-06-04,muscle_gain,Feel Alive Elite,258.0,257.2
+WF-009,2026-06-04,fat_loss,Foundation,246.2,196.6
+WF-010,2026-06-06,recomp,Discipline 90,231.7,231.0
+WF-011,2026-06-02,fat_loss,Feel Alive Elite,238.7,198.2
+WF-012,2026-06-07,muscle_gain,Discipline 90,241.6,236.9
+WF-013,2026-06-01,muscle_gain,Foundation,188.1,186.6
+WF-014,2026-06-10,fat_loss,Feel Alive Elite,207.1,185.1
+WF-015,2026-06-08,recomp,Foundation,206.5,216.8
